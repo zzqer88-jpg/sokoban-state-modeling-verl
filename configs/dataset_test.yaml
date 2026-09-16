@@ -1,0 +1,9 @@
+manifest_path: ${oc.env:SOKOBAN_STATE_TEST_MANIFEST}
+manifest_index_path: ${oc.env:SOKOBAN_STATE_TEST_INDEX}
+expected_tasks: 10000
+data_source: sokoban_state_modeling_test
+reward_profile: ${oc.env:SOKOBAN_STATE_REWARD_PROFILE,dense}
+reasoning_mode: ${oc.env:REASONING_MODE}
+agent_name: single_turn_agent
+verify_manifest_rows: true
+shuffle: false

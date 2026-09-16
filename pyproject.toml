@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sokoban-state-modeling-verl"
+version = "0.1.0"
+description = "Standalone Sokoban visual state-modeling environments and VERL adapters"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+dependencies = [
+  "numpy>=1.24",
+  "Pillow>=9.5",
+  "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0", "torch>=2.4"]
+training-contract = ["omegaconf>=2.3"]
+migration-test = ["gym-sokoban==0.0.6"]
+
+[project.scripts]
+sokoban-generate = "sokoban_state_modeling.scripts.generate_dataset:main"
+sokoban-audit-splits = "sokoban_state_modeling.scripts.audit_splits:main"
+sokoban-evaluate = "sokoban_state_modeling.scripts.evaluate:main"
+sokoban-preflight = "sokoban_state_modeling.scripts.preflight_training:main"
+sokoban-runtime-probe = "sokoban_state_modeling.scripts.probe_runtime:main"
+sokoban-train = "sokoban_state_modeling.training.main_ppo:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+sokoban_state_modeling = ["assets/sprites/*.png"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra"

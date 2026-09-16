@@ -1,0 +1,101 @@
+# Synchronous GRPO candidate merged onto the locked VERL ppo_trainer config.
+algorithm:
+  adv_estimator: grpo
+  norm_adv_by_std_in_grpo: true
+  use_kl_in_reward: false
+  filter_groups:
+    enable: false
+
+data:
+  train_files:
+    - ${oc.env:SOKOBAN_STATE_TRAIN_MANIFEST}
+  val_files:
+    - ${oc.env:SOKOBAN_STATE_VALIDATION_MANIFEST}
+  custom_cls:
+    path: ${oc.env:SOKOBAN_PROJECT_ROOT}/src/sokoban_state_modeling/data/dataset.py
+    name: SokobanStateDataset
+  train_manifest_index_path: ${oc.env:SOKOBAN_STATE_TRAIN_INDEX}
+  validation_manifest_index_path: ${oc.env:SOKOBAN_STATE_VALIDATION_INDEX}
+  train_batch_size: 256
+  gen_batch_size: 256
+  val_batch_size: 256
+  max_prompt_length: 1024
+  max_response_length: 2048
+  dataloader_num_workers: 8
+  shuffle: false
+  validation_shuffle: false
+  filter_overlong_prompts: false
+  truncation: error
+  return_raw_chat: true
+  verify_manifest_rows: true
+  reward_profile: ${oc.env:SOKOBAN_STATE_REWARD_PROFILE,dense}
+  reasoning_mode: thinking
+  thinking_prompt_open: true
+  agent_name: single_turn_agent
+  apply_chat_template_kwargs:
+    enable_thinking: true
+
+actor_rollout_ref:
+  model:
+    path: ${oc.env:MODEL_PATH}
+    use_remove_padding: true
+    enable_gradient_checkpointing: true
+  actor:
+    strategy: fsdp
+    optim:
+      lr: 1.0e-6
+    ppo_mini_batch_size: 64
+    use_dynamic_bsz: true
+    ppo_max_token_len_per_gpu: 24576
+    use_kl_loss: true
+    kl_loss_coef: 0.01
+    kl_loss_type: low_var_kl
+    fsdp_config:
+      param_offload: false
+      optimizer_offload: false
+  rollout:
+    name: ${oc.env:INFER_BACKEND,vllm}
+    tensor_model_parallel_size: 2
+    gpu_memory_utilization: 0.6
+    n: 4
+    log_prob_use_dynamic_bsz: true
+    log_prob_max_token_len_per_gpu: 24576
+  ref:
+    strategy: fsdp
+    log_prob_use_dynamic_bsz: true
+    log_prob_max_token_len_per_gpu: 24576
+    fsdp_config:
+      param_offload: true
+
+critic:
+  enable: false
+
+reward:
+  custom_reward_function:
+    path: ${oc.env:SOKOBAN_PROJECT_ROOT}/src/sokoban_state_modeling/reward/verl_reward.py
+    name: compute_score
+  reward_manager:
+    source: importlib
+    name: SokobanRewardManager
+    module:
+      path: ${oc.env:SOKOBAN_PROJECT_ROOT}/src/sokoban_state_modeling/reward/verl_reward_manager.py
+      name: SokobanRewardManager
+  reward_model:
+    enable: false
+
+trainer:
+  balance_batch: true
+  logger: [console]
+  project_name: sokoban_state_modeling
+  experiment_name: qwen35_4b_grpo_thinking_fsdp
+  nnodes: 1
+  n_gpus_per_node: 8
+  save_freq: 20
+  test_freq: 5
+  total_epochs: 15
+  resume_mode: auto
+  default_local_dir: ${oc.env:SOKOBAN_OUTPUT_DIR,outputs/checkpoints}/qwen35_4b_grpo_thinking_fsdp
+  v1:
+    trainer_mode: sync
+    sampler:
+      sync_refill_failed_groups: false

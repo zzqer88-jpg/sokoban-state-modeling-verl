@@ -1,0 +1,9 @@
+custom_reward_function:
+  path: ${oc.env:SOKOBAN_PROJECT_ROOT}/src/sokoban_state_modeling/reward/verl_reward.py
+  name: compute_score
+reward_manager:
+  source: importlib
+  name: SokobanRewardManager
+  module:
+    path: ${oc.env:SOKOBAN_PROJECT_ROOT}/src/sokoban_state_modeling/reward/verl_reward_manager.py
+    name: SokobanRewardManager

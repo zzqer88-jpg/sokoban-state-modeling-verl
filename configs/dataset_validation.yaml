@@ -1,0 +1,9 @@
+manifest_path: ${oc.env:SOKOBAN_STATE_VALIDATION_MANIFEST}
+manifest_index_path: ${oc.env:SOKOBAN_STATE_VALIDATION_INDEX}
+expected_tasks: 2000
+data_source: sokoban_state_modeling_validation
+reward_profile: ${oc.env:SOKOBAN_STATE_REWARD_PROFILE,dense}
+reasoning_mode: ${oc.env:REASONING_MODE}
+agent_name: single_turn_agent
+verify_manifest_rows: true
+shuffle: false

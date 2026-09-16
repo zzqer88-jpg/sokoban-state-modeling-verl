@@ -1,0 +1,4 @@
+reasoning_mode: thinking
+thinking_prompt_open: true
+apply_chat_template_kwargs:
+  enable_thinking: true

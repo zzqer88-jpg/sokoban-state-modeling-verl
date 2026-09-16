@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "verified": false,
+  "source_audited": true,
+  "repository": "https://github.com/verl-project/verl.git",
+  "commit": "61134f92099913b6f8fa5920ac5839a4a314212d",
+  "interfaces": {
+    "verl/trainer/main_ppo.py": "11e0ed90cf77d1d32734769935b5c96137dbd43f1d00e7c5ec68be99708d709e",
+    "verl/trainer/ppo/v1/trainer_base.py": "038ef64af31bd5acb646326429c914dbddfb0ce8cf4fa503f53c05a40b3517f1",
+    "verl/trainer/ppo/v1/trainer_sync.py": "c6d96e0e7fa86f90b50b495b1fd2457523d7940533c63956f446b1cd6bb22068",
+    "verl/trainer/ppo/core_algos.py": "4ddf7d6e8b06c396f192ea537c4bd0c2d75772378a04fcec4c9646149c5ae086",
+    "verl/trainer/ppo/utils.py": "8aafeebd8c962f5c336f6bb32d1b32c65ffa5eff8766f37de94926e9aaf0aefc",
+    "verl/utils/dataset/rl_dataset.py": "0973a7df6008193d1f14e7df0b608b220a81039dbb721ce8f189a95a8f820fe4",
+    "verl/experimental/agent_loop/agent_loop.py": "1e55c86661312b8092d4cf3bc05ac27439b1d2da8e4f7eb98a02f0268a1c65f2",
+    "verl/experimental/agent_loop/single_turn_agent_loop.py": "82ed213c0700aa85ed488fc3b67521bc77faa0d091a20e6c315502e1100dcec1",
+    "verl/trainer/ppo/reward.py": "bee9556cbffa9143bac987d48a18392ba099e5672dede257f91db89115c1b735",
+    "verl/experimental/reward_loop/reward_manager/base.py": "a578c531e8eee5074d05e774724a684b36919d553c5dd45a494c65e91d6ee25f",
+    "verl/experimental/reward_loop/reward_manager/naive.py": "11bb249743b10b36b7eba9b0950557e55e5378b4de46d02c518008044729ba84"
+  },
+  "symbols": {
+    "verl/trainer/ppo/core_algos.py": {
+      "compute_grpo_outcome_advantage": "a75e649242ad4ed3695c8d70878a83fda274fa740956d8e77ea400bac5aa60b2"
+    },
+    "verl/trainer/ppo/utils.py": {
+      "need_critic": "e5a6478d63506531f26fa80c4d9ccaa9fc14cbe881492b92d51600fbf15bf64c"
+    },
+    "verl/trainer/ppo/v1/trainer_base.py": {
+      "PPOTrainer._init_dataloader": "408844c11e0c369ea2d248329a82d1c9c45c0e695ae000c345d002cc8e4b4b51",
+      "PPOTrainer._val_metrics_update": "c91b54e3daffe3d85feb490a79d63ade8b1bae6905ffa188a02ab441ca8eed2d",
+      "PPOTrainer._compute_metrics": "9871e01c5d10cc9e25fa775e4b78a9d562d6d21ab7ff691c5d13691daec93b06"
+    },
+    "verl/utils/dataset/rl_dataset.py": {
+      "RLHFDataset.__init__": "a6088a995d42bb90bc46301cb3addcbab1236074c4eda2dd294b8ee9103e8a76"
+    },
+    "verl/experimental/agent_loop/agent_loop.py": {
+      "AgentLoopOutput": "86493181a04f2bb54d925354c8261ff954eb06deb6f6c1fbc9cfc21c3210289c",
+      "AgentLoopBase.run": "db752658fd4ae4b73e8e71da45da3bfd45dffa521954a887ea7b4c4b36a6304b",
+      "AgentLoopWorker._compute_score": "5c39f48fa42debb4950646b2154a4a88df722e2e5bfa85ed6d556faa704625c1"
+    },
+    "verl/trainer/ppo/reward.py": {
+      "resolve_reward_manager_cls": "51b1530297788fd4250e64da0a4e60bb1a1d05073dd62461d8a61e546f3a07ff",
+      "load_reward_manager": "cb2fecfae1d553dff575063f9e19b2d8d9c857a26c6044eb2d1fd5dcf171aa9c"
+    },
+    "verl/experimental/reward_loop/reward_manager/base.py": {
+      "RewardManagerBase.__init__": "c28307f9b0c7dcc1e4862133a17167a3669d884e7dd886f9b445cfcff3028250",
+      "RewardManagerBase.assemble_rm_scores": "76232ae36545437921a4588399133a69492158b4b5740e4ee7829cade16fbbe4"
+    },
+    "verl/experimental/reward_loop/reward_manager/naive.py": {
+      "NaiveRewardManager.run_single": "0eab4b647ca78cbbdaa5630e3268d91507e688c056241b2c18329fbd863432c9"
+    }
+  },
+  "note": "Source interfaces were audited on 2026-09-15. verified remains false until CPU tokenizer/Hydra and GPU FSDP/rollout probes pass."
+}

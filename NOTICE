@@ -1,0 +1,17 @@
+Sokoban State Modeling for VERL
+
+This standalone project contains code migrated from VAGEN
+(https://github.com/RAGEN-AI/VAGEN), copyright (c) 2025 RAGEN.AI, MIT License.
+The original notice is reproduced in THIRD_PARTY_LICENSES/VAGEN-MIT.txt.
+
+The Sokoban generation logic derives from RAGEN
+(https://github.com/mll-lab-nu/RAGEN), copyright 2025 RAGEN Team, MIT License;
+its notice is reproduced in THIRD_PARTY_LICENSES/RAGEN-MIT.txt. The bundled
+Sokoban sprites and parts of the deterministic room generation algorithm derive
+from gym-sokoban (https://github.com/mpSchrader/gym-sokoban), copyright (c)
+2018 Max-Philipp Schrader, MIT License. The original MIT notice is reproduced
+in THIRD_PARTY_LICENSES/gym-sokoban-MIT.txt.
+
+VERL is not copied into this source tree. Training integrates with a separately
+checked-out, commit-locked VERL repository. VERL is distributed under the
+Apache License 2.0 by its respective contributors.

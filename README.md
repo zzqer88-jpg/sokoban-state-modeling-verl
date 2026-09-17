@@ -41,6 +41,88 @@ The complete migration and release gates are documented in
 `STANDALONE_VERL_MIGRATION_PLAN.md`; the immutable single-turn dataset contract
 is documented in `DATASET_PLAN.md`.
 
+## Thinking SFT data
+
+The prompt-open thinking cold-start contract is documented in
+`SFT_THINKING_DATA_PLAN.md`. Export deterministic, replay-checked JSONL records
+from any published manifest with:
+
+```bash
+python -m sokoban_state_modeling.scripts.export_thinking_sft \
+  --manifest ./data/release/manifests/train.jsonl \
+  --index ./data/release/manifests/train.idx \
+  --output ./data/release/sft/train.thinking.jsonl
+```
+
+Every source row is replayed action by action. The exporter fails closed if the
+recorded events, termination flag, or final state disagree with the transition
+engine. It publishes a SHA-256 audit next to the JSONL and never overwrites an
+existing export.
+
+### Formal 12k cold start
+
+The SFT cold start is a separate, smaller release from the 50k online-RL task
+pool documented below. Generate it on the server; do not commit generated data
+to Git:
+
+```bash
+export SOKOBAN_PROJECT_ROOT=/absolute/path/sokoban-state-modeling-verl
+cd "$SOKOBAN_PROJECT_ROOT"
+python -m pip install -e .
+
+python -m sokoban_state_modeling.scripts.generate_dataset --output-dir ./data/sft_cold_start --split train --num-tasks 12000 --resume
+python -m sokoban_state_modeling.scripts.generate_dataset --output-dir ./data/sft_cold_start --split validation --num-tasks 1200 --resume
+python -m sokoban_state_modeling.scripts.generate_dataset --output-dir ./data/sft_cold_start --split test --num-tasks 3000 --resume
+python -m sokoban_state_modeling.scripts.audit_splits \
+  --train ./data/sft_cold_start/manifests/train.jsonl \
+  --validation ./data/sft_cold_start/manifests/validation.jsonl \
+  --test ./data/sft_cold_start/manifests/test.jsonl \
+  --output ./data/sft_cold_start/audits/split_leakage.json
+
+for split in train validation test; do
+  python -m sokoban_state_modeling.scripts.export_thinking_sft \
+    --manifest "./data/sft_cold_start/manifests/${split}.jsonl" \
+    --index "./data/sft_cold_start/manifests/${split}.idx" \
+    --output "./data/sft_cold_start/sft/${split}.thinking.jsonl"
+done
+
+python -m sokoban_state_modeling.scripts.preflight_sft \
+  --train ./data/sft_cold_start/sft/train.thinking.jsonl \
+  --validation ./data/sft_cold_start/sft/validation.thinking.jsonl \
+  --report ./data/sft_cold_start/audits/sft_preflight.json
+```
+
+The preflight requires the exact 12,000/1,200 quotas, all seven transition
+events, unique task hashes, and no train/validation map leakage. The custom SFT
+Dataset renders `current_state` lazily, so exported JSONL does not duplicate
+images and SFT sees the same renderer as RL.
+
+Launch one-stage full-parameter SFT with the pinned VERL checkout:
+
+```bash
+export VERL_CHECKOUT=/absolute/path/verl
+export MODEL_PATH=/absolute/path/Qwen3.5-4B
+export SFT_DATA_ROOT="$SOKOBAN_PROJECT_ROOT/data/sft_cold_start/sft"
+export NGPUS_PER_NODE=8
+export TOTAL_EPOCHS=1
+bash "$SOKOBAN_PROJECT_ROOT/scripts/train_sft_qwen35_4b.sh"
+```
+
+The launcher explicitly sets `model.lora_rank=0`, so every trainable model
+parameter is optimized; no adapter is created. It defaults to learning rate
+`1e-5`, global batch 48, a 2,048-token hard limit (`truncation=error`), a
+32,768-token dynamic budget per GPU, and one epoch. With eight GPUs, batch 48
+means six samples per GPU and exactly 250 train plus 25 validation batches, so
+VERL's `drop_last=true` does not discard formal samples. On eight H200 GPUs,
+keep `SP_SIZE=1`, `PARAM_OFFLOAD=false`, and `OPTIMIZER_OFFLOAD=false`. Full SFT
+saves full sharded model and optimizer checkpoints, so reserve materially more
+disk space than LoRA. `PARAM_OFFLOAD=true` and
+`OPTIMIZER_OFFLOAD=true` are available if GPU memory is insufficient, at the
+cost of speed. The launcher runs the formal data preflight before `torchrun`.
+The locked VERL Qwen thinking path assembles turns separately, so it uses the
+documented `ignore_input_ids_mismatch=true` mode; the exported target and
+thinking boundary are still validated before training.
+
 ## Server staging
 
 Do not copy `.deps/verl` implicitly through Git: `.deps/` is intentionally
@@ -58,8 +140,8 @@ this package into the same environment. The audited VERL checkout currently
 defines `vllm` and `fsdp` extras; its exact CUDA requirements must match the
 server rather than being guessed from the development machine.
 
-Generate and publish the three formal splits (the command is resumable at
-committed chunks):
+Generate and publish the three larger online-RL splits (the command is
+resumable at committed chunks):
 
 ```bash
 export PYTHONPATH="$SOKOBAN_PROJECT_ROOT/src:$VERL_CHECKOUT${PYTHONPATH:+:$PYTHONPATH}"

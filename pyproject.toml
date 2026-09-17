@@ -27,6 +27,8 @@ sokoban-evaluate = "sokoban_state_modeling.scripts.evaluate:main"
 sokoban-preflight = "sokoban_state_modeling.scripts.preflight_training:main"
 sokoban-runtime-probe = "sokoban_state_modeling.scripts.probe_runtime:main"
 sokoban-train = "sokoban_state_modeling.training.main_ppo:main"
+sokoban-export-thinking-sft = "sokoban_state_modeling.scripts.export_thinking_sft:main"
+sokoban-preflight-sft = "sokoban_state_modeling.scripts.preflight_sft:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

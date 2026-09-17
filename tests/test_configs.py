@@ -83,3 +83,14 @@ def test_training_launcher_selects_algorithm_and_reasoning_profile():
     assert 'TRAIN_ALGORITHM="${TRAIN_ALGORITHM:-ppo}"' in script
     assert "ppo|grpo" in script
     assert "${TRAIN_ALGORITHM}_qwen35_4b_${REASONING_MODE}.yaml" in script
+
+
+def test_sft_launcher_is_full_parameter_training():
+    script = (CONFIG_ROOT.parent / "scripts" / "train_sft_qwen35_4b.sh").read_text(encoding="utf-8")
+    assert "model.lora_rank=0" in script
+    assert "model.lora_adapter_path=null" in script
+    assert "save_lora_only" not in script
+    assert "LORA_RANK" not in script
+    assert 'LEARNING_RATE=${LEARNING_RATE:-1e-5}' in script
+    assert 'TRAIN_BATCH_SIZE=${TRAIN_BATCH_SIZE:-48}' in script
+    assert 'MAX_TOKEN_LEN_PER_GPU=${MAX_TOKEN_LEN_PER_GPU:-32768}' in script

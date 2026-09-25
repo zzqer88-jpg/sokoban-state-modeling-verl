@@ -41,6 +41,16 @@ The complete migration and release gates are documented in
 `STANDALONE_VERL_MIGRATION_PLAN.md`; the immutable single-turn dataset contract
 is documented in `DATASET_PLAN.md`.
 
+## Visual Jev-style probability SFT
+
+The separate `jev/` module now supports English full-board image questions,
+seven-class probability supervision, a local Transformers Qwen backend, LoRA
+training, single-node FSDP2 full SFT, checkpoint resume, and whole-board evaluation. It reuses current states
+from the original SFT JSONL and Pev's candidate-distribution KL objective; it does
+not require SGLang or the VERL training adapter. See [JEV_USAGE.md](JEV_USAGE.md)
+for conversion, audit, training, and prediction commands. GPU/4B validation and
+real remote-data conversion remain outstanding; no formal training was started.
+
 ## Thinking SFT data
 
 The prompt-open thinking cold-start contract is documented in

@@ -19,6 +19,12 @@ dependencies = [
 test = ["pytest>=8.0", "torch>=2.4"]
 training-contract = ["omegaconf>=2.3"]
 migration-test = ["gym-sokoban==0.0.6"]
+jev = [
+  "torch>=2.6,<3",
+  "torchvision>=0.21",
+  "transformers==5.17.0",
+  "peft==0.21.0",
+]
 
 [project.scripts]
 sokoban-generate = "sokoban_state_modeling.scripts.generate_dataset:main"
@@ -28,6 +34,8 @@ sokoban-preflight = "sokoban_state_modeling.scripts.preflight_training:main"
 sokoban-runtime-probe = "sokoban_state_modeling.scripts.probe_runtime:main"
 sokoban-train = "sokoban_state_modeling.training.main_ppo:main"
 sokoban-export-thinking-sft = "sokoban_state_modeling.scripts.export_thinking_sft:main"
+sokoban-export-jev-sft = "sokoban_state_modeling.scripts.export_jev_sft:main"
+sokoban-jev = "sokoban_state_modeling.jev.cli:main"
 sokoban-preflight-sft = "sokoban_state_modeling.scripts.preflight_sft:main"
 
 [tool.setuptools]

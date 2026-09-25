@@ -1,0 +1,19 @@
+# Single-process reference configuration. Change model_path to your checkpoint.
+model_path: /absolute/path/to/Qwen3.5-4B
+revision: null
+data_path: data/jev_perception_v1/records.jsonl
+output_dir: outputs/jev_visual_run1
+device: cuda
+dtype: bfloat16
+finetune_mode: full  # Train vision encoder, merger, language backbone, and LM head
+epochs: 1
+board_batch_size: 1
+cell_batch_size: 4
+learning_rate: 0.00001
+max_grad_norm: 1.0
+max_length: 4096
+# Pixel budgets are provisional: inspect actual processed boards before training.
+min_pixels: 65536
+max_pixels: 262144
+seed: 42
+gradient_checkpointing: true

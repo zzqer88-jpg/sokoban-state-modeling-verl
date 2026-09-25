@@ -1,0 +1,21 @@
+# Single node, 8 H800 GPUs. All model parameters train; no LoRA.
+model_path: /absolute/path/to/Qwen3.5-4B
+revision: null
+data_path: data/jev_perception_v1/records.jsonl
+output_dir: outputs/jev_full_8xh800_run1
+device: cuda
+dtype: bfloat16
+finetune_mode: full
+distributed: fsdp2
+epochs: 1
+# Per-rank boards/update: effective global board batch = 8 * 1 = 8.
+board_batch_size: 1
+# Per-rank cell questions per forward. Each question sees the full image.
+cell_batch_size: 4
+learning_rate: 0.00001
+max_grad_norm: 1.0
+max_length: 4096
+min_pixels: 65536
+max_pixels: 262144
+seed: 42
+gradient_checkpointing: true

@@ -11,3 +11,4 @@ dist/
 *.jsonl
 *.idx
 /.deps/
+.DS_Store

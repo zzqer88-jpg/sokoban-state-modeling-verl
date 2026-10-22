@@ -20,6 +20,7 @@ from sokoban_state_modeling.engine import render_state
 from sokoban_state_modeling.state.codec import grid_to_state
 
 from sokoban_state_modeling.sft.thinking_trace import SFT_SCHEMA_VERSION
+from sokoban_state_modeling.sft.perception import PERCEPTION_SCHEMA_VERSION, validate_perception_record
 
 try:  # VERL is deliberately an optional, server-side dependency.
     from verl.utils.dataset.multiturn_sft_dataset import MultiTurnSFTDataset
@@ -33,7 +34,9 @@ except ImportError:  # pragma: no cover - exercised only without the training ch
 
 def prepare_thinking_sft_record(record: dict[str, Any]) -> dict[str, Any]:
     """Validate one exported row and append its supervised assistant turn."""
-    if record.get("sft_schema_version") != SFT_SCHEMA_VERSION:
+    if record.get("sft_schema_version") == PERCEPTION_SCHEMA_VERSION:
+        validate_perception_record(record)
+    elif record.get("sft_schema_version") != SFT_SCHEMA_VERSION:
         raise ValueError(f"unsupported SFT schema: {record.get('sft_schema_version')!r}")
     messages = record.get("messages")
     if not isinstance(messages, list) or [item.get("role") for item in messages] != ["system", "user"]:

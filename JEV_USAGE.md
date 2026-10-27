@@ -35,17 +35,22 @@ sokoban-generate \
 
 sokoban-generate \
   --output-dir data/sokoban_size_generalization_v1 \
-  --split validation --num-tasks 70 \
+  --split validation --num-tasks 700 \
   --profile perception-size-generalization-v1
 
 sokoban-generate \
   --output-dir data/sokoban_size_generalization_v1 \
-  --split test --num-tasks 140 \
+  --split test --num-tasks 2800 \
   --profile perception-size-generalization-v1
 ```
 
-These counts give 200 training boards, 10 validation boards per seen size, and
-20 test boards per size. Then export the perception-only Jev data:
+These counts give 200 training boards, 100 validation boards per seen size, and
+400 test boards per size. The 2,800-board test set is close to the previous
+3,000-board evaluation scale while remaining exactly balanced across seven size
+strata. At 90% accuracy, 400 boards per size give an approximate 95% binomial
+margin of error of 3 percentage points; 20 boards per size would be about 13
+points and is suitable only for a smoke test. Then export the perception-only
+Jev data:
 
 ```bash
 sokoban-export-jev-sft \

@@ -1,12 +1,13 @@
 """Indexed JSONL loading with strict separation of inputs and targets."""
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import hashlib
 import json
 from pathlib import Path
 from PIL import Image
 
-from .models import (BoardInput, CLASSES, SCHEMA, probability_vector)
+from .models import BoardInput, CLASSES, SAMPLED_SCHEMA, SCHEMA, probability_vector
+from .sampling import SAMPLER_VERSION
 
 
 def file_sha256(path: Path) -> str:
@@ -34,19 +35,45 @@ class BoardExample:
 
 
 def parse_record(record: dict, root: Path) -> BoardExample:
-    if record.get("schema_version") != SCHEMA or record.get("class_order") != list(CLASSES):
+    schema = record.get("schema_version")
+    if schema not in {SCHEMA, SAMPLED_SCHEMA} or record.get("class_order") != list(CLASSES):
         raise ValueError("Unsupported schema or class order")
     raw = record["input"]
     path = (root / raw["image_ref"]).resolve()
     if not path.is_relative_to(root.resolve()) or not path.is_file():
         raise ValueError("Image must exist inside the export directory")
-    board = BoardInput.create(path, record["height"], record["width"])
-    if raw["state"] != board.state:
+    full_board = BoardInput.create(path, record["height"], record["width"])
+    if raw["state"] != full_board.state:
         raise ValueError("Unexpected state instructions")
+    full_questions = {question.key: question for question in full_board.questions}
+    if schema == SAMPLED_SCHEMA:
+        sampling = raw.get("sampling")
+        if not isinstance(sampling, dict) or sampling.get("version") != SAMPLER_VERSION:
+            raise ValueError("Missing or unsupported cell sampling metadata")
+        coordinates = sampling.get("selected_coordinates")
+        if (not isinstance(coordinates, list) or not coordinates
+                or any(not isinstance(item, list) or len(item) != 2
+                       or any(type(value) is not int for value in item) for item in coordinates)):
+            raise ValueError("selected_coordinates must be a nonempty list of [row, column] pairs")
+        keys = [f"cell_{row}_{column}" for row, column in coordinates]
+        if len(keys) != len(set(keys)) or any(key not in full_questions for key in keys):
+            raise ValueError("Sampled coordinates must be unique and inside the board")
+        canonical = [question.key for question in full_board.questions if question.key in set(keys)]
+        if keys != canonical:
+            raise ValueError("Sampled coordinates must use canonical row-major order")
+        budget = sampling.get("budget")
+        if type(budget) is not int or budget < 1 or len(keys) != min(budget, len(full_questions)):
+            raise ValueError("Sampled coordinate count disagrees with its budget")
+        board = replace(full_board, questions=tuple(full_questions[key] for key in keys))
+    else:
+        board = full_board
     expected = {q.key for q in board.questions}
     answers = record["target"]["answers"]
     if set(raw["questions"]) != expected or set(answers) != expected:
-        raise ValueError("Questions and targets must cover each coordinate exactly once")
+        message = ("Questions and targets must match sampled coordinates exactly"
+                   if schema == SAMPLED_SCHEMA else
+                   "Questions and targets must cover each coordinate exactly once")
+        raise ValueError(message)
     targets = []
     for question in board.questions:
         value = raw["questions"][question.key]

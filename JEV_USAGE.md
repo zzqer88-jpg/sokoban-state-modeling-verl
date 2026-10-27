@@ -25,14 +25,25 @@ Run from the repository root on the server containing the original data:
 ```bash
 sokoban-export-jev-sft \
   --input data/sftcoldstartv11/sft/*.jsonl \
-  --output data/jev_perception_v1
+  --output data/jev_perception_sampled_200 \
+  --train-cell-budget 16 \
+  --max-train-boards 200
 ```
 
 Pass all split files together. Only current states are reused. Original action,
 reasoning and prediction targets are excluded. Output is `records.jsonl`, PNGs
 under `images/`, and `audit.json`. Existing destinations are never overwritten.
-The original release targets 12,000 train / 1,200 validation / 3,000 test records;
-deduplication can reduce these counts. Actual counts are reported in the audit.
+The command defaults to 200 unique training boards and 16 questions per training
+board, for at most 3,200 supervised training cells after deduplication. It first
+includes the player, every box and every target, then samples up to five local
+neighbors, boundary/interior walls, near/far floors, and spatially balanced
+cells from all four board regions. Sampling is deterministic for each state and
+its exact coordinates are stored in the record.
+
+Validation and test boards retain every coordinate, so full-board exact accuracy
+remains a valid evaluation metric. The 200-board cap applies only to the train
+split. The audit records the available and selected unique training-board counts,
+cell budget, and sampler version under `train_sampling`.
 The converter checks rotations/reflections of terrain maps for cross-split
 leakage; it does not infer every possible procedural-generation family.
 

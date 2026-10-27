@@ -15,6 +15,7 @@ DESCRIPTIONS = (
     "The player on a goal square.",
 )
 SCHEMA = "sokoban-jev-perception-v1"
+SAMPLED_SCHEMA = "sokoban-jev-perception-sampled-v1"
 
 
 def probability_vector(values: Mapping[str, float]) -> tuple[float, ...]:

@@ -13,7 +13,8 @@ import numpy as np
 
 from sokoban_state_modeling import GENERATOR_VERSION, RENDERER_VERSION, SCHEMA_VERSION
 from sokoban_state_modeling.engine import generate_room_snapshots
-from sokoban_state_modeling.state.codec import StateSnapshot, map_hash, room_to_state, state_hash, task_hash
+from sokoban_state_modeling.state.codec import (StateSnapshot, map_hash, room_to_state, state_hash,
+                                                task_hash, terrain_family_hash)
 from sokoban_state_modeling.state.transition import DELTAS, is_terminal
 from sokoban_state_modeling.state.validation import solve_forward, validation_errors
 from sokoban_state_modeling.utils.seeding import set_seed
@@ -237,7 +238,8 @@ class DatasetBuilder:
             if errors or is_terminal(state):
                 continue
             mh, sh = map_hash(state), state_hash(state)
-            if not _belongs_to_split(mh, self.split) or mh in self.used_maps or sh in self.used_states:
+            if (not _belongs_to_split(terrain_family_hash(state), self.split)
+                    or mh in self.used_maps or sh in self.used_states):
                 continue
             wall_ratio, corridor_ratio = _wall_stats(state)
             if wall_ratio > 0.55:

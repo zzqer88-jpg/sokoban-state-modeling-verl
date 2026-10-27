@@ -1,7 +1,7 @@
 # Single node, 8 H800 GPUs. All model parameters train; no LoRA.
 model_path: /absolute/path/to/Qwen3.5-4B
 revision: null
-data_path: data/jev_perception_v1/records.jsonl
+data_path: data/jev_perception_sampled_200/records.jsonl
 output_dir: outputs/jev_full_8xh800_run1
 device: cuda
 dtype: bfloat16

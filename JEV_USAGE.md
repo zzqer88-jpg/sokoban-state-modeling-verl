@@ -20,11 +20,36 @@ been validated here. No model weights are included in this repository.
 
 ## Convert the existing SFT dataset
 
-Run from the repository root on the server containing the original data:
+For the 200-board size-generalization experiment, first generate fresh source
+manifests. The train and validation splits use seven seen dimensions:
+`6x6`, `6x7`, `7x6`, `7x7`, `7x8`, `8x7`, and `8x8`. The test split mixes
+three seen square dimensions with four unseen dimensions: `6x8`, `8x6`, `7x9`,
+and `9x7`. The unseen dimensions remain at or below the exact solver's 64-cell
+limit.
+
+```bash
+sokoban-generate \
+  --output-dir data/sokoban_size_generalization_v1 \
+  --split train --num-tasks 200 \
+  --profile perception-size-generalization-v1
+
+sokoban-generate \
+  --output-dir data/sokoban_size_generalization_v1 \
+  --split validation --num-tasks 70 \
+  --profile perception-size-generalization-v1
+
+sokoban-generate \
+  --output-dir data/sokoban_size_generalization_v1 \
+  --split test --num-tasks 140 \
+  --profile perception-size-generalization-v1
+```
+
+These counts give 200 training boards, 10 validation boards per seen size, and
+20 test boards per size. Then export the perception-only Jev data:
 
 ```bash
 sokoban-export-jev-sft \
-  --input data/sftcoldstartv11/sft/*.jsonl \
+  --input data/sokoban_size_generalization_v1/manifests/*.jsonl \
   --output data/jev_perception_sampled_200 \
   --train-cell-budget 16 \
   --max-train-boards 200
@@ -44,6 +69,11 @@ Validation and test boards retain every coordinate, so full-board exact accuracy
 remains a valid evaluation metric. The 200-board cap applies only to the train
 split. The audit records the available and selected unique training-board counts,
 cell budget, and sampler version under `train_sampling`.
+Training-board selection is balanced across all available dimensions. The audit
+also includes `board_size_counts` and `size_generalization`; the latter must list
+the four held-out dimensions under `unseen_test_sizes`. The command fails when a
+provided test split contains no dimension absent from training. Use
+`--allow-seen-test-sizes-only` only for a deliberate same-size control run.
 The converter checks rotations/reflections of terrain maps for cross-split
 leakage; it does not infer every possible procedural-generation family.
 

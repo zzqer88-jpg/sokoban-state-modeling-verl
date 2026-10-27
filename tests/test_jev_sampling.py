@@ -44,16 +44,23 @@ def test_sampled_record_has_metadata_and_sixteen_questions():
 def test_export_caps_unique_train_boards_and_keeps_validation_full(tmp_path: Path):
     validation_grid = ["#######", "#P____#", "#_X_O_#", "#_____#", "#######"]
     rows = [source(grid, task_id=f"train-{index}") for index, grid in enumerate(TRAIN_GRIDS)]
+    rows.append(source(["#######", "#P____#", "#_XO__#", "#_____#", "#_____#", "#######"],
+                       task_id="train-6x7"))
     rows.append(source(validation_grid, split="validation", task_id="validation"))
+    rows.append(source(["########", "#P_____#", "#_X_O__#", "#______#", "#______#", "########"],
+                       split="test", task_id="test-6x8"))
     input_path = tmp_path / "source.jsonl"
     input_path.write_text("\n".join(json.dumps(row) for row in rows) + "\n")
 
     output = tmp_path / "export"
-    report = export_jev([input_path], output, train_cell_budget=16, max_train_boards=2)
+    report = export_jev([input_path], output, train_cell_budget=16, max_train_boards=2,
+                        require_unseen_test_sizes=True)
 
-    assert report["split_counts"] == {"train": 2, "validation": 1}
-    assert report["train_sampling"]["available_unique_boards"] == 3
+    assert report["split_counts"] == {"train": 2, "validation": 1, "test": 1}
+    assert report["train_sampling"]["available_unique_boards"] == 4
     assert report["train_sampling"]["selected_unique_boards"] == 2
+    assert report["train_sampling"]["selected_size_counts"] == {"6x7": 1, "8x8": 1}
+    assert report["size_generalization"]["unseen_test_sizes"] == ["6x8"]
     records = [json.loads(line) for line in (output / "records.jsonl").read_text().splitlines()]
     train = [record for record in records if record["split"] == "train"]
     validation = [record for record in records if record["split"] == "validation"]
@@ -65,3 +72,21 @@ def test_export_caps_unique_train_boards_and_keeps_validation_full(tmp_path: Pat
     assert len(training_data) == 2
     assert len(training_data[0].inputs.questions) == 16
     assert len(validation_data[0].inputs.questions) == 35
+
+
+def test_export_rejects_test_without_unseen_size_when_required(tmp_path: Path):
+    train = source(TRAIN_GRIDS[0])
+    test_grid = ["########", "#P_____#", "#_##___#", "#___X__#",
+                 "#___O__#", "#______#", "#______#", "########"]
+    test = source(test_grid, split="test", task_id="same-size-test")
+    input_path = tmp_path / "same-size.jsonl"
+    input_path.write_text(json.dumps(train) + "\n" + json.dumps(test) + "\n")
+    output = tmp_path / "export"
+    try:
+        export_jev([input_path], output, train_cell_budget=16, max_train_boards=200,
+                   require_unseen_test_sizes=True)
+    except ValueError as error:
+        assert "board size absent from train" in str(error)
+    else:
+        raise AssertionError("same-size-only test split should have been rejected")
+    assert not output.exists()

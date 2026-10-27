@@ -126,5 +126,15 @@ def state_hash(state: StateSnapshot) -> str:
     return canonical_hash("state", state)
 
 
+def terrain_family_hash(state: StateSnapshot) -> str:
+    """Hash terrain canonically across rotations and reflections."""
+    variants = []
+    for array in (state.fixed, np.fliplr(state.fixed)):
+        for turns in range(4):
+            rotated = np.rot90(array, turns)
+            variants.append(json.dumps(rotated.tolist(), separators=(",", ":")))
+    return hashlib.sha256(min(variants).encode()).hexdigest()
+
+
 def task_hash(state: StateSnapshot, actions: Iterable[str]) -> str:
     return canonical_hash("task", state, list(actions))

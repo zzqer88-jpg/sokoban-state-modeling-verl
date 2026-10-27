@@ -4,7 +4,7 @@ import pytest
 
 from sokoban_state_modeling.generator.audit import audit_manifest
 from sokoban_state_modeling.generator.dataset_builder import DatasetBuilder
-from sokoban_state_modeling.generator.sampler import MAIN_V1, QuotaSchedule
+from sokoban_state_modeling.generator.sampler import MAIN_V1, SIZE_GENERALIZATION_V1, QuotaSchedule
 
 
 def test_joint_quota_schedule_is_exact():
@@ -42,6 +42,25 @@ def test_eval_dimensions_are_equal_strata():
     assert Counter(test.assignment(i)["dim_room"] for i in range(10_000)) == {
         (6, 6): 3_334, (7, 7): 3_333, (8, 8): 3_333,
     }
+
+
+def test_size_generalization_profile_has_seen_and_unseen_test_dimensions():
+    train = QuotaSchedule(700, SIZE_GENERALIZATION_V1, 11, split="train")
+    validation = QuotaSchedule(700, SIZE_GENERALIZATION_V1, 12, split="validation")
+    test = QuotaSchedule(700, SIZE_GENERALIZATION_V1, 13, split="test")
+    train_sizes = Counter(train.assignment(i)["dim_room"] for i in range(700))
+    validation_sizes = Counter(validation.assignment(i)["dim_room"] for i in range(700))
+    test_sizes = Counter(test.assignment(i)["dim_room"] for i in range(700))
+    assert train_sizes == validation_sizes == {
+        (6, 6): 100, (6, 7): 100, (7, 6): 100, (7, 7): 100,
+        (7, 8): 100, (8, 7): 100, (8, 8): 100,
+    }
+    assert test_sizes == {
+        (6, 6): 100, (7, 7): 100, (8, 8): 100,
+        (6, 8): 100, (8, 6): 100, (7, 9): 100, (9, 7): 100,
+    }
+    assert set(test_sizes) - set(train_sizes) == {(6, 8), (8, 6), (7, 9), (9, 7)}
+    assert all(height * width <= 64 for height, width in test_sizes)
 
 
 def test_generation_resumes_only_committed_chunks(tmp_path):

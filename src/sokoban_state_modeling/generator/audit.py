@@ -14,13 +14,15 @@ from sokoban_state_modeling import GENERATOR_VERSION, RENDERER_VERSION, SCHEMA_V
 from sokoban_state_modeling.engine import render_state, renderer_provenance
 from sokoban_state_modeling.reward.reward import score_response
 from .manifest_store import ManifestStore
-from .sampler import MAIN_V1, QuotaSchedule
-from sokoban_state_modeling.state.codec import grid_to_state, map_hash, state_hash, state_to_grid, task_hash
+from .sampler import MAIN_V1, QuotaSchedule, SamplerProfile
+from sokoban_state_modeling.state.codec import (grid_to_state, map_hash, state_hash, state_to_grid,
+                                                task_hash, terrain_family_hash)
 from sokoban_state_modeling.state.transition import apply_actions
 from sokoban_state_modeling.state.validation import solve_forward, validation_errors
 
 
-def audit_manifest(manifest_path: str | Path, index_path: str | Path | None = None) -> dict:
+def audit_manifest(manifest_path: str | Path, index_path: str | Path | None = None,
+                   profile: SamplerProfile = MAIN_V1) -> dict:
     store = ManifestStore(manifest_path, index_path)
     counts = {
         name: Counter() for name in (
@@ -58,7 +60,7 @@ def audit_manifest(manifest_path: str | Path, index_path: str | Path | None = No
                     raise ValueError(f"duplicate {name} hash")
                 hashes[name].add(value)
             cfg, metadata = row["resolved_generator_config"], row["metadata"]
-            solver = solve_forward(current, MAIN_V1.max_forward_bfs_nodes)
+            solver = solve_forward(current, profile.max_forward_bfs_nodes)
             if solver.status != "solvable" or solver.shortest_steps != metadata["shortest_solution_steps"]:
                 raise ValueError("solver status/shortest path mismatch")
             split = split or row["split"]
@@ -98,9 +100,9 @@ def audit_manifest(manifest_path: str | Path, index_path: str | Path | None = No
                 raise ValueError(f"missing required anchor event for {category}")
 
             golden = "<perception>\n" + "\n".join(state_to_grid(current)) + "\n</perception>\n<prediction>\n" + "\n".join(state_to_grid(nxt)) + "\n</prediction>"
-            for profile in ("dense", "exact_only"):
-                if score_response(golden, current, nxt, row["query_actions"], num_boxes, profile).reward != 1.0:
-                    raise ValueError(f"golden response is not perfect under {profile}")
+            for reward_profile in ("dense", "exact_only"):
+                if score_response(golden, current, nxt, row["query_actions"], num_boxes, reward_profile).reward != 1.0:
+                    raise ValueError(f"golden response is not perfect under {reward_profile}")
             copy = "<perception>\n" + "\n".join(state_to_grid(current)) + "\n</perception>\n<prediction>\n" + "\n".join(state_to_grid(current)) + "\n</prediction>"
             copy_result = score_response(copy, current, nxt, row["query_actions"], num_boxes, "dense")
             if state_hash(current) != state_hash(nxt):
@@ -115,7 +117,9 @@ def audit_manifest(manifest_path: str | Path, index_path: str | Path | None = No
     violations: list[str] = []
     if not failures and split is not None and len(store) >= 20:
         expected_schedule = QuotaSchedule(
-            len(store), MAIN_V1, MAIN_V1.dataset_seed + {"train": 0, "validation": 10_000_000, "test": 20_000_000}[split], split=split
+            len(store), profile,
+            profile.dataset_seed + {"train": 0, "validation": 10_000_000, "test": 20_000_000}[split],
+            split=split,
         )
         expected_rows = [expected_schedule.assignment(i) for i in range(len(store))]
         comparisons = {
@@ -172,8 +176,8 @@ def audit_manifest(manifest_path: str | Path, index_path: str | Path | None = No
             "generator_version": GENERATOR_VERSION,
             "renderer_version": RENDERER_VERSION,
             "split": split,
-            "dataset_seed": MAIN_V1.dataset_seed,
-            "sampler_profile": asdict(MAIN_V1),
+            "dataset_seed": profile.dataset_seed,
+            "sampler_profile": asdict(profile),
             "numpy_version": np.__version__,
             "python_version": platform.python_version(),
             "bit_generator": np.random.PCG64.__name__,
@@ -201,9 +205,11 @@ def audit_split_leakage(manifests: dict[str, str | Path]) -> dict:
     split_hashes: dict[str, dict[str, set[str]]] = {}
     for split, manifest in manifests.items():
         store = ManifestStore(manifest)
-        values = {name: set() for name in ("map", "current", "task")}
+        values = {name: set() for name in ("terrain_family", "map", "current", "task")}
         for index in range(len(store)):
             row = store.read(index, verify=False)
+            current = grid_to_state(row["current_state"]["grid"])
+            values["terrain_family"].add(terrain_family_hash(current))
             values["map"].add(row["map_hash"])
             values["current"].add(row["current_state_hash"])
             values["task"].add(row["task_hash"])
@@ -214,7 +220,7 @@ def audit_split_leakage(manifests: dict[str, str | Path]) -> dict:
         for right in names[left_index + 1:]:
             intersections[f"{left}__{right}"] = {
                 kind: len(split_hashes[left][kind] & split_hashes[right][kind])
-                for kind in ("map", "current", "task")
+                for kind in ("terrain_family", "map", "current", "task")
             }
     return {
         "split_sizes": {split: len(values["task"]) for split, values in split_hashes.items()},

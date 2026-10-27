@@ -36,6 +36,8 @@ class SamplerProfile:
     name: str = "main-v1"
     dataset_seed: int = 18427
     dim_room: WeightedChoices = WeightedChoices(((6, 6), (7, 7), (8, 8)), (0.60, 0.25, 0.15))
+    validation_dim_room: WeightedChoices | None = None
+    test_dim_room: WeightedChoices | None = None
     num_boxes: WeightedChoices = WeightedChoices((1, 2), (0.90, 0.10))
     topology_multiplier: WeightedChoices = WeightedChoices((0.75, 1.0, 1.25, 1.5), (0.15, 0.50, 0.25, 0.10))
     p_change_directions: WeightedChoices = WeightedChoices((0.15, 0.35, 0.60, 0.80), (0.15, 0.50, 0.25, 0.10))
@@ -57,6 +59,29 @@ class SamplerProfile:
 
 MAIN_V1 = SamplerProfile()
 
+_SIZE_TRAIN = ((6, 6), (6, 7), (7, 6), (7, 7), (7, 8), (8, 7), (8, 8))
+_SIZE_TEST = ((6, 6), (7, 7), (8, 8), (6, 8), (8, 6), (7, 9), (9, 7))
+SIZE_GENERALIZATION_V1 = SamplerProfile(
+    name="perception-size-generalization-v1",
+    dataset_seed=29173,
+    dim_room=WeightedChoices(_SIZE_TRAIN, (1 / 7,) * 7),
+    validation_dim_room=WeightedChoices(_SIZE_TRAIN, (1 / 7,) * 7),
+    # 3/7 of test boards use familiar square sizes; 4/7 use dimensions never
+    # present in training. All remain within the 64-cell exact-solver limit.
+    test_dim_room=WeightedChoices(_SIZE_TEST, (1 / 7,) * 7),
+    max_task_attempts=2_000,
+)
+
+
+def dimensions_for_split(profile: SamplerProfile, split: str) -> WeightedChoices:
+    override = getattr(profile, f"{split}_dim_room", None)
+    if override is not None:
+        return override
+    if split in {"validation", "test"}:
+        count = len(profile.dim_room.values)
+        return WeightedChoices(profile.dim_room.values, (1 / count,) * count)
+    return profile.dim_room
+
 
 class QuotaSchedule:
     """Deterministic independently shuffled exact marginal assignments."""
@@ -66,13 +91,14 @@ class QuotaSchedule:
         self.profile = profile
         self.rng = np.random.default_rng(seed)
         self._columns: dict[str, list[Any]] = {}
+        self.dimension_choices = dimensions_for_split(profile, split)
         for name in (
             "dim_room", "topology_multiplier", "p_change_directions",
             "reverse_search_depth", "primary_state_category", "action_length",
         ):
             choices: WeightedChoices = getattr(profile, name)
-            if name == "dim_room" and split in {"validation", "test"}:
-                choices = WeightedChoices(choices.values, (1 / 3, 1 / 3, 1 / 3))
+            if name == "dim_room":
+                choices = self.dimension_choices
             values: list[Any] = []
             for value, count in zip(choices.values, largest_remainder(total, choices.weights)):
                 values.extend([value] * count)
@@ -231,19 +257,32 @@ class QuotaSchedule:
         direction_forced = {i: 0.15 for i in narrow_rows}
         direction_forced.update({i: 0.35 for i in far_rows})
         rebuild_with_forced("p_change_directions", direction_forced)
-        # Rebuild the dimension column jointly. The 15% far-distance quota is paired
-        # exactly with the 15% 8x8 quota; smaller interiors cannot produce distance
-        # >= 6 reliably once walls, boxes and reachability constraints are applied.
+        # Rebuild the dimension column jointly. Assign far-distance rows to the
+        # largest available interiors; small rooms cannot reliably realize distance
+        # >= 6 once walls, boxes, and reachability constraints are applied.
         original_dimensions = self._columns["dim_room"]
-        dimension_counts = {value: original_dimensions.count(value) for value in self.profile.dim_room.values}
+        dimension_counts = {value: original_dimensions.count(value)
+                            for value in self.dimension_choices.values}
         dimensions: list[Any] = [None] * total
-        for i in far_rows:
-            if dimension_counts.get((8, 8), 0) <= 0:
-                raise ValueError("the 8x8 quota is too small for the far-distance quota")
-            dimensions[i] = (8, 8)
-            dimension_counts[(8, 8)] -= 1
+        largest_first = sorted(
+            self.dimension_choices.values,
+            key=lambda value: ((value[0] - 2) + (value[1] - 2), value[0] * value[1]),
+            reverse=True,
+        )
+        far_dimensions: list[Any] = []
+        for value in largest_first:
+            take = min(dimension_counts[value], len(far_rows) - len(far_dimensions))
+            far_dimensions.extend([value] * take)
+            dimension_counts[value] -= take
+            if len(far_dimensions) == len(far_rows):
+                break
+        if len(far_dimensions) != len(far_rows):
+            raise ValueError("dimension quota is too small for the far-distance quota")
+        self.rng.shuffle(far_dimensions)
+        for i, value in zip(far_rows, far_dimensions):
+            dimensions[i] = value
         remaining_dimensions = [
-            value for value in self.profile.dim_room.values
+            value for value in self.dimension_choices.values
             for _ in range(dimension_counts.get(value, 0))
         ]
         self.rng.shuffle(remaining_dimensions)

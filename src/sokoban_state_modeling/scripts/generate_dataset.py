@@ -7,6 +7,13 @@ from pathlib import Path
 
 from sokoban_state_modeling.generator.audit import audit_manifest
 from sokoban_state_modeling.generator.dataset_builder import DatasetBuilder
+from sokoban_state_modeling.generator.sampler import MAIN_V1, SIZE_GENERALIZATION_V1
+
+
+PROFILES = {
+    MAIN_V1.name: MAIN_V1,
+    SIZE_GENERALIZATION_V1.name: SIZE_GENERALIZATION_V1,
+}
 
 
 def main() -> None:
@@ -14,6 +21,8 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--split", choices=("train", "validation", "test"), required=True)
     parser.add_argument("--num-tasks", type=int, required=True)
+    parser.add_argument("--profile", choices=tuple(PROFILES), default=MAIN_V1.name,
+                        help="Generation profile; use perception-size-generalization-v1 for size OOD data")
     parser.add_argument(
         "--resume", action="store_true",
         help="resume the split's committed 100-row generation chunks",
@@ -32,8 +41,11 @@ def main() -> None:
     if staging_dir.exists() and not args.resume:
         raise FileExistsError(f"unfinished staging directory exists; inspect it or rerun with --resume: {staging_dir}")
     staging_dir.mkdir(parents=True, exist_ok=True)
-    manifest, index = DatasetBuilder(staging_dir, args.split, args.num_tasks).build(resume=args.resume)
-    report = audit_manifest(manifest, index)
+    profile = PROFILES[args.profile]
+    manifest, index = DatasetBuilder(
+        staging_dir, args.split, args.num_tasks, profile=profile
+    ).build(resume=args.resume)
+    report = audit_manifest(manifest, index, profile=profile)
     if not report["passed"]:
         failed_audit = staging_dir / "audit-failed.json"
         failed_audit.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")

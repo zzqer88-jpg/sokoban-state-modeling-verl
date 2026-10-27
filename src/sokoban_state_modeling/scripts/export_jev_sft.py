@@ -14,11 +14,14 @@ def main():
                         help="Sample this many cells from each training board (default: 16)")
     parser.add_argument("--max-train-boards", type=int, default=200,
                         help="Use at most this many unique training boards (default: 200)")
+    parser.add_argument("--allow-seen-test-sizes-only", action="store_true",
+                        help="Do not fail when test contains no board size absent from train")
     args = parser.parse_args()
     print(json.dumps(export_jev(
         args.input, args.output,
         train_cell_budget=args.train_cell_budget,
         max_train_boards=args.max_train_boards,
+        require_unseen_test_sizes=not args.allow_seen_test_sizes_only,
     ), indent=2))
 
 

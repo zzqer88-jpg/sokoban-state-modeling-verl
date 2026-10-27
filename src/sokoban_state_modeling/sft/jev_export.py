@@ -18,7 +18,8 @@ from PIL import Image
 from sokoban_state_modeling.jev.dataset import file_sha256
 from sokoban_state_modeling import RENDERER_VERSION
 from sokoban_state_modeling.engine.env import render_state
-from sokoban_state_modeling.state.codec import StateSnapshot, grid_to_state, map_hash, state_hash
+from sokoban_state_modeling.state.codec import (StateSnapshot, grid_to_state, map_hash, state_hash,
+                                                terrain_family_hash)
 
 from sokoban_state_modeling.jev.models import (
     CLASSES, SYMBOLS, DESCRIPTIONS, SAMPLED_SCHEMA, SCHEMA, board_state, cell_question,
@@ -28,12 +29,7 @@ from sokoban_state_modeling.jev.sampling import SAMPLER_VERSION, select_training
 
 def family_hash(state: StateSnapshot) -> str:
     """Group terrain-identical rotations and reflections across splits."""
-    variants = []
-    for array in (state.fixed, np.fliplr(state.fixed)):
-        for turns in range(4):
-            rotated = np.rot90(array, turns)
-            variants.append(json.dumps(rotated.tolist(), separators=(",", ":")))
-    return hashlib.sha256(min(variants).encode()).hexdigest()
+    return terrain_family_hash(state)
 
 
 def build_record(source: dict, cell_budget: int | None = None) -> tuple[dict, StateSnapshot]:
@@ -98,13 +94,15 @@ def build_record(source: dict, cell_budget: int | None = None) -> tuple[dict, St
     }, state
 
 
-def _select_train_states(inputs: list[Path], limit: int | None) -> tuple[set[str] | None, int]:
-    """Choose an order-independent subset of unique training boards."""
+def _select_train_states(
+    inputs: list[Path], limit: int | None,
+) -> tuple[set[str] | None, int, dict[str, int], dict[str, int]]:
+    """Choose a deterministic, size-balanced subset of unique training boards."""
     if limit is None:
-        return None, 0
+        return None, 0, {}, {}
     if type(limit) is not int or limit < 1:
         raise ValueError("max_train_boards must be a positive integer or None")
-    candidates: set[str] = set()
+    candidates: dict[str, set[str]] = {}
     for path in inputs:
         with path.open("rb") as handle:
             for line_no, raw in enumerate(handle, 1):
@@ -113,24 +111,47 @@ def _select_train_states(inputs: list[Path], limit: int | None) -> tuple[set[str
                 try:
                     source = json.loads(raw)
                     if source.get("split") == "train":
-                        candidates.add(state_hash(grid_to_state(source["current_state"]["grid"])))
+                        state = grid_to_state(source["current_state"]["grid"])
+                        size = f"{state.shape[0]}x{state.shape[1]}"
+                        candidates.setdefault(size, set()).add(state_hash(state))
                 except (KeyError, ValueError, TypeError) as exc:
                     raise ValueError(f"{path}:{line_no}: {exc}") from exc
-    return set(sorted(candidates)[:limit]), len(candidates)
+    ordered = {size: sorted(values) for size, values in sorted(candidates.items())}
+    selected: set[str] = set()
+    selected_counts = Counter()
+    offsets = {size: 0 for size in ordered}
+    while len(selected) < limit:
+        progressed = False
+        for size, values in ordered.items():
+            offset = offsets[size]
+            if offset < len(values):
+                selected.add(values[offset])
+                selected_counts[size] += 1
+                offsets[size] += 1
+                progressed = True
+                if len(selected) == limit:
+                    break
+        if not progressed:
+            break
+    available_counts = {size: len(values) for size, values in ordered.items()}
+    return selected, sum(available_counts.values()), available_counts, dict(selected_counts)
 
 
 def export_jev(inputs: list[Path], output: Path, train_cell_budget: int | None = None,
-               max_train_boards: int | None = None) -> dict:
+               max_train_boards: int | None = None,
+               require_unseen_test_sizes: bool = False) -> dict:
     """Export atomically; fail on terrain-family leakage, deduplicate states."""
     if output.exists():
         raise FileExistsError(output)
     if train_cell_budget is not None and (type(train_cell_budget) is not int or train_cell_budget < 1):
         raise ValueError("train_cell_budget must be a positive integer or None")
-    selected_train_states, available_train_boards = _select_train_states(inputs, max_train_boards)
+    (selected_train_states, available_train_boards,
+     available_train_sizes, selected_train_sizes) = _select_train_states(inputs, max_train_boards)
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = Path(tempfile.mkdtemp(prefix=f".{output.name}-", dir=output.parent))
     seen, families = set(), {}
     counts, classes = Counter(), Counter()
+    board_sizes: dict[str, Counter] = {}
     sources, duplicates = [], 0
     try:
         (temporary / "images").mkdir()
@@ -170,6 +191,7 @@ def export_jev(inputs: list[Path], output: Path, train_cell_budget: int | None =
                             record["provenance"].update(source_file=str(path.resolve()), source_line=line_no)
                             dest.write(json.dumps(record, ensure_ascii=True) + "\n")
                             counts[split] += 1
+                            board_sizes.setdefault(split, Counter())[f"{state.shape[0]}x{state.shape[1]}"] += 1
                             for answer in record["target"]["answers"].values():
                                 classes.update([max(answer["probabilities"], key=answer["probabilities"].get)])
                         except (KeyError, ValueError, TypeError) as exc:
@@ -177,15 +199,30 @@ def export_jev(inputs: list[Path], output: Path, train_cell_budget: int | None =
                 sources.append({"path": str(path.resolve()), "sha256": digest.hexdigest()})
         if not seen:
             raise ValueError("no records found")
+        train_sizes = set(board_sizes.get("train", {}))
+        test_sizes = set(board_sizes.get("test", {}))
+        unseen_test_sizes = sorted(test_sizes - train_sizes)
+        if require_unseen_test_sizes and test_sizes and not unseen_test_sizes:
+            raise ValueError("test split must contain at least one board size absent from train")
         report = {"schema_version": SCHEMA, "records": len(seen), "duplicates_removed": duplicates,
                   "split_counts": dict(counts), "cell_class_counts": dict(classes), "sources": sources,
+                  "board_size_counts": {split: dict(values)
+                                        for split, values in board_sizes.items()},
+                  "size_generalization": {
+                      "train_sizes": sorted(train_sizes),
+                      "test_sizes": sorted(test_sizes),
+                      "unseen_test_sizes": unseen_test_sizes,
+                      "has_unseen_test_sizes": bool(unseen_test_sizes),
+                  },
                   "train_sampling": {
                       "sampler_version": SAMPLER_VERSION if train_cell_budget is not None else None,
                       "cells_per_board": train_cell_budget,
                       "max_boards": max_train_boards,
                       "available_unique_boards": available_train_boards,
+                      "available_size_counts": available_train_sizes,
                       "selected_unique_boards": (len(selected_train_states)
                                                   if selected_train_states is not None else None),
+                      "selected_size_counts": selected_train_sizes,
                   },
                   "records_sha256": file_sha256(temporary / "records.jsonl"),
                   "target_source": "engine_one_hot", "unmodified_openjev_compatible": False}
